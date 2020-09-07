@@ -24,6 +24,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
+  genmsg
   image_geometry
   image_transport
   roscpp
@@ -31,8 +32,19 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   pcl_ros
   arc_utilities
-  cdcpd
+  kinematics_toolbox
+  message_generation
+  # cdcpd
 )
+
+add_message_files(
+  FILES
+  Float32MultiArrayStamped.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -52,7 +64,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES cdcpd_ros
-#  CATKIN_DEPENDS cv_bridge image_transport roscpp sensor_msgs
+ CATKIN_DEPENDS message_runtime
 #  DEPENDS system_lib
 )
 
@@ -67,6 +79,7 @@ include_directories(
   SYSTEM
   ${catkin_INCLUDE_DIRS}
 )
+message(${catkin_INCLUDE_DIRS})
 
 # Node for live data
 # add_executable(${PROJECT_NAME}
@@ -85,15 +98,29 @@ include_directories(
 #target_compile_options(${PROJECT_NAME} PRIVATE -O3 -Wall -Wextra -Wconversion -Wshadow)
 
 # Node for bagged data
-add_executable(${PROJECT_NAME}_bagfile
-  src/cdcpd_bagfile.cpp
+#add_executable(${PROJECT_NAME}_bagfile
+  #src/cdcpd_bagfile.cpp
+#)
+#set_target_properties(${PROJECT_NAME}_bagfile PROPERTIES
+    #OUTPUT_NAME bagfile PREFIX ""
+    #CXX_STANDARD 17
+    #CXX_STANDARD_REQUIRED YES)
+#add_dependencies(${PROJECT_NAME}_bagfile ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+#target_link_libraries(${PROJECT_NAME}_bagfile PRIVATE
+  #${catkin_LIBRARIES}
+#)
+#target_compile_options(${PROJECT_NAME}_bagfile PRIVATE -O3 -Wall -Wextra -Wconversion -Werror -Wshadow)
+
+# Node for test data
+add_executable(${PROJECT_NAME}_exp_test
+  src/cdcpd_exp_test.cpp
 )
-set_target_properties(${PROJECT_NAME}_bagfile PROPERTIES
-    OUTPUT_NAME bagfile PREFIX ""
+set_target_properties(${PROJECT_NAME}_exp_test PROPERTIES
+    OUTPUT_NAME exp_test PREFIX ""
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES)
-add_dependencies(${PROJECT_NAME}_bagfile ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(${PROJECT_NAME}_bagfile PRIVATE
+add_dependencies(${PROJECT_NAME}_exp_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(${PROJECT_NAME}_exp_test PRIVATE
   ${catkin_LIBRARIES}
 )
-target_compile_options(${PROJECT_NAME}_bagfile PRIVATE -O3 -Wall -Wextra -Wconversion -Werror -Wshadow)
+target_compile_options(${PROJECT_NAME}_exp_test PRIVATE -O3 -Wall -Wextra -Wconversion -Werror -Wshadow)
