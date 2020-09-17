@@ -1,45 +1,26 @@
 #include <string>
 #include <vector>
-#include <thread>
 #include <chrono>
 #include <map>
 
 #include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
 
 #include <ros/ros.h>
-#include <ros/package.h>
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 #include <cv_bridge/cv_bridge.h>
-#include <image_transport/image_transport.h>
 #include <image_geometry/pinhole_camera_model.h>
-#include <pcl/point_types.h>
-#include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <pcl_ros/point_cloud.h>
-#include <message_filters/subscriber.h>
 #include <message_filters/simple_filter.h>
-#include <message_filters/time_synchronizer.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
-#include <std_msgs/Float32MultiArray.h>
-#include <tf2_ros/transform_listener.h>
-#include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Point.h>
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
 #include <kinematics_toolbox/kinematics.h>
 #include <arc_utilities/eigen_helpers.hpp>
 #include <arc_utilities/ros_helpers.hpp>
 
 #include <cdcpd_ros/Float32MultiArrayStamped.h>
 
-using std::cout;
-using std::endl;
-using std::string;
 using Eigen::MatrixXd;
 using Eigen::MatrixXf;
 using Eigen::MatrixXi;
@@ -55,7 +36,6 @@ typedef kinematics::VectorVector6d AllGrippersSinglePoseDelta;
 typedef EigenHelpers::VectorIsometry3d AllGrippersSinglePose;
 
 namespace gm = geometry_msgs;
-namespace vm = visualization_msgs;
 namespace sm = sensor_msgs;
 namespace stdm = std_msgs;
 
@@ -67,48 +47,6 @@ std::vector<sm::Image::ConstPtr> depth_images;
 std::vector<sm::CameraInfo::ConstPtr> camera_infos;
 std::vector<cdcpd_ros::Float32MultiArrayStamped::ConstPtr> grippers_config;
 std::vector<cdcpd_ros::Float32MultiArrayStamped::ConstPtr> grippers_dot;
-std::vector<cdcpd_ros::Float32MultiArrayStamped::ConstPtr> grippers_ind;
-
-std::string workingDir = "/home/deformtrack/catkin_ws/src/cdcpd_test/log";
-
-typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
-
-template <class M>
-class BagSubscriber : public message_filters::SimpleFilter<M>
-{
-public:
-    void newMessage(const boost::shared_ptr<M const> &msg)
-    {
-        this->signalMessage(msg);
-    }
-};
-
-void callback(
-    const sm::Image::ConstPtr &rgb_img,
-    const sm::Image::ConstPtr &depth_img,
-    const sm::CameraInfo::ConstPtr &cam_info,
-    const cdcpd_ros::Float32MultiArrayStamped::ConstPtr& g_config,
-    const cdcpd_ros::Float32MultiArrayStamped::ConstPtr& g_dot,
-    const cdcpd_ros::Float32MultiArrayStamped::ConstPtr& g_ind
-    // #ifdef PREDICT
-    // ,
-    // const cdcpd_ros::Float32MultiArrayStamped::ConstPtr &g_config,
-    // const cdcpd_ros::Float32MultiArrayStamped::ConstPtr &g_dot,
-    // const cdcpd_ros::Float32MultiArrayStamped::ConstPtr &g_ind,
-    // const cdcpd_ros::Float32MultiArrayStamped::ConstPtr &one_truth
-    // #endif
-    )
-{
-    color_images.push_back(rgb_img);
-    depth_images.push_back(depth_img);
-    camera_infos.push_back(cam_info);
-    // #ifdef PREDICT
-    grippers_config.push_back(g_config);
-    grippers_dot.push_back(g_dot);
-    grippers_ind.push_back(g_ind);
-    // ground_truth.push_back(one_truth);
-    // #endif
-}
 
 std::tuple<cv::Mat, cv::Mat, cv::Matx33d> toOpenCv(
     const sm::Image::ConstPtr &rgb_img,
@@ -136,25 +74,21 @@ std::tuple<cv::Mat, cv::Mat, cv::Matx33d> toOpenCv(
 }
 
 std::tuple<AllGrippersSinglePose,
-           AllGrippersSinglePoseDelta,
-           MatrixXi> toGripperConfig(
+           AllGrippersSinglePoseDelta> //,MatrixXi>
+           toGripperConfig(
     const cdcpd_ros::Float32MultiArrayStamped::ConstPtr &g_config,
-    const cdcpd_ros::Float32MultiArrayStamped::ConstPtr &g_dot,
-    const cdcpd_ros::Float32MultiArrayStamped::ConstPtr &g_ind)
+    const cdcpd_ros::Float32MultiArrayStamped::ConstPtr &g_dot)
 {
     uint32_t num_gripper = (g_config->data.layout).dim[0].size;
     uint32_t num_config = (g_config->data.layout).dim[1].size;
     uint32_t num_dot = (g_dot->data.layout).dim[1].size;
-    uint32_t num_ind = (g_ind->data.layout).dim[1].size;
 
     std::cout << "num of gripper " << num_gripper << std::endl;
     std::cout << "num of config " << num_config << std::endl;
     std::cout << "num of gripper dot " << num_dot << std::endl;
-    std::cout << "num of gripper index " << num_ind << std::endl;
 
     AllGrippersSinglePose one_frame_config;
     AllGrippersSinglePoseDelta one_frame_velocity;
-    MatrixXi one_frame_ind(num_ind, num_gripper);
 
     for (uint32_t g = 0; g < num_gripper; ++g)
     {
@@ -174,53 +108,40 @@ std::tuple<AllGrippersSinglePose,
             one_velocity(i) = double((g_dot->data.data)[num_dot*g + i]);
         }
 
-        for (uint32_t i = 0; i < num_ind; ++i)
-        {
-            one_frame_ind(i, g) = int((g_ind->data.data)[num_ind*g + i]);
-        }
-
         one_frame_config.push_back(one_config);
         one_frame_velocity.push_back(one_velocity);
     }
 
-    return {one_frame_config, one_frame_velocity, one_frame_ind};
+    return {one_frame_config, one_frame_velocity};
 }
 
 int main(int argc, char* argv[])
 {
-    // test_nearest_line();
-    // test_lle();
-    // ENHANCE: more smart way to get Y^0 and E
-    //test_velocity_calc();
     ros::init(argc, argv, "cdcpd_bagfile");
-    cout << "Starting up..." << endl;
+    std::cout << "Starting up..." << std::endl;
 
     ros::NodeHandle nh;
     ros::NodeHandle ph("~");
 
-    BagSubscriber<sm::Image> rgb_sub, depth_sub;
-    BagSubscriber<sm::CameraInfo> info_sub;
-    BagSubscriber<cdcpd_ros::Float32MultiArrayStamped> config_sub, dot_sub, ind_sub;
-
     std::vector<std::string> topics;
 
-    topics.push_back(std::string("/kinect2/qhd/image_color_rect"));
-    topics.push_back(std::string("/kinect2/qhd/image_depth_rect"));
-    topics.push_back(std::string("/kinect2/qhd/camera_info"));
-    topics.push_back(std::string("/kinect2/qhd/gripper_velocity"));
-    topics.push_back(std::string("/kinect2/qhd/gripper_info"));
-    topics.push_back(std::string("/kinect2/qhd/gripper_config"));
+    topics.emplace_back(std::string("/kinect2_victor_head/qhd/image_color_rect"));
+    topics.emplace_back(std::string("/kinect2_victor_head/qhd/image_depth_rect"));
+    topics.emplace_back(std::string("/kinect2_victor_head/qhd/camera_info"));
+    topics.emplace_back(std::string("/kinect2_victor_head/qhd/dot_config"));
+    topics.emplace_back(std::string("/kinect2_victor_head/qhd/gripper_config"));
+
+    std::cout << "topics created" << std::endl;
 
     auto const bagfile = ROSHelpers::GetParam<std::string>(ph, "bagfile", "normal");
-    auto const folder = ros::package::getPath("cdcpd_ros") + "/../cdcpd_test/dataset/";
-
-    rosbag::Bag bag(folder + bagfile + ".bag", rosbag::bagmode::Read);
+    auto const folder = "/home/victorrope/catkin_ws_cdcpd/src/cdcpd_test/dataset/";
+    std::cout << "about to read bag" << std::endl;
+    rosbag::Bag bag;
+    bag.open(folder + bagfile + ".bag", rosbag::bagmode::Read);
+    std::cout << "after open bag" << std::endl;
     rosbag::View view(bag, rosbag::TopicQuery(topics));
 
-    auto sync = message_filters::TimeSynchronizer<sm::Image, sm::Image, sm::CameraInfo, cdcpd_ros::Float32MultiArrayStamped, cdcpd_ros::Float32MultiArrayStamped, cdcpd_ros::Float32MultiArrayStamped>(
-            rgb_sub, depth_sub, info_sub, config_sub, dot_sub, ind_sub, 25);
-    sync.registerCallback(boost::bind(&callback, _1, _2, _3, _4, _5, _6));
-
+    std::cout << "about to read" << std::endl;
     for(rosbag::MessageInstance const& m: view)
     {
         if (m.getTopic() == topics[0])
@@ -228,11 +149,11 @@ int main(int argc, char* argv[])
             auto i = m.instantiate<sm::Image>();
             if (i != nullptr)
             {
-                rgb_sub.newMessage(i);
+                color_images.emplace_back(i);
             }
             else
             {
-                cout << "NULL initiation!" << endl;
+                std::cout << "NULL initiation!" << std::endl;
             }
         }
         else if (m.getTopic() == topics[1])
@@ -240,68 +161,52 @@ int main(int argc, char* argv[])
             auto i = m.instantiate<sm::Image>();
             if (i != nullptr)
             {
-                depth_sub.newMessage(i);
+                depth_images.emplace_back(i);
             }
             else
             {
-                cout << "NULL initiation!" << endl;
+                std::cout << "NULL initiation!" << std::endl;
             }
         }
         else if (m.getTopic() == topics[2])
         {
-            auto info = m.instantiate<sm::CameraInfo>();
-            if (info != nullptr)
+            auto i = m.instantiate<sm::CameraInfo>();
+            if (i != nullptr)
             {
-                info_sub.newMessage(info);
+                camera_infos.emplace_back(i);
             }
             else
             {
-                cout << "NULL initiation!" << endl;
+                std::cout << "NULL initiation!" << std::endl;
             }
         }
         else if (m.getTopic() == topics[3])
         {
-            auto info = m.instantiate<cdcpd_ros::Float32MultiArrayStamped>();
-            if (info != nullptr)
+            auto i = m.instantiate<cdcpd_ros::Float32MultiArrayStamped>();
+            if (i != nullptr)
             {
-                // grippers_dot.push_back(info);
-                dot_sub.newMessage(info);
+                grippers_dot.emplace_back(i);
             }
             else
             {
-                cout << "NULL initiation!" << endl;
+                std::cout << "NULL initiation!" << std::endl;
             }
         }
         else if (m.getTopic() == topics[4])
         {
-            auto info = m.instantiate<cdcpd_ros::Float32MultiArrayStamped>();
-            if (info != nullptr)
+            auto i = m.instantiate<cdcpd_ros::Float32MultiArrayStamped>();
+            if (i != nullptr)
             {
-                // grippers_ind.push_back(info);
-                ind_sub.newMessage(info);
+                grippers_config.emplace_back(i);
             }
             else
             {
-                cout << "NULL initiation!" << endl;
-            }
-        }
-        else if (m.getTopic() == topics[5])
-        {
-            auto info = m.instantiate<cdcpd_ros::Float32MultiArrayStamped>();
-            if (info != nullptr)
-            {
-                // grippers_config.push_back(info);
-                config_sub.newMessage(info);
-            }
-            else
-            {
-                cout << "NULL initiation!" << endl;
+                std::cout << "NULL initiation!" << std::endl;
             }
         }
         else
         {
-            cerr << "Invalid topic: " << m.getTopic() << endl;
-            exit(1);
+            std::cerr << "Invalid topic: " << m.getTopic() << std::endl;
         }
     }
     bag.close();
@@ -311,28 +216,26 @@ int main(int argc, char* argv[])
     auto info_iter = camera_infos.cbegin();
     auto config_iter = grippers_config.cbegin();
     auto velocity_iter = grippers_dot.cbegin();
-    auto ind_iter = grippers_ind.cbegin();
 
-    cout << "rgb images size: " << color_images.size() << endl;
-    cout << "depth images size: " << depth_images.size() << endl;
-    cout << "camera infos size: " << camera_infos.size() << endl;
-    cout << "gripper configuration size: " << grippers_config.size() << endl;
-    cout << "gripper velocity size: " << grippers_dot.size() << endl;
-    cout << "gripper index size: " << grippers_ind.size() << endl;
+    std::cout << "rgb images size: " << color_images.size() << std::endl;
+    std::cout << "depth images size: " << depth_images.size() << std::endl;
+    std::cout << "camera infos size: " << camera_infos.size() << std::endl;
+    std::cout << "gripper configuration size: " << grippers_config.size() << std::endl;
+    std::cout << "gripper velocity size: " << grippers_dot.size() << std::endl;
 
-    auto [g_config, g_dot, g_ind] = toGripperConfig(*config_iter, *velocity_iter, *ind_iter);
+    auto [g_config, g_dot] = toGripperConfig(*config_iter, *velocity_iter);
     auto [color_image_bgr, depth_image, intrinsics] = toOpenCv(*color_iter, *depth_iter, *info_iter);
 
-    cout << "rbg image size: " << color_image_bgr.rows << "-" << color_image_bgr.cols << endl;
-    cout << "depth image size: " << depth_image.rows << "-" << depth_image.cols << endl;
-    cout << "intrinsics: " << endl;
-    cout << intrinsics << endl << endl;
-    cout << "gripper configuration: " << endl;
-    cout << g_config[0].matrix() << endl << endl;
-    cout << "gripper velocity: " << endl;
-    cout << g_dot[0].matrix() << endl << endl;
-    cout << "gripper index" << endl;
-    cout << g_ind << endl << endl;
+    std::cout << "rbg image size: " << color_image_bgr.rows << "-" << color_image_bgr.cols << std::endl;
+    std::cout << "depth image size: " << depth_image.rows << "-" << depth_image.cols << std::endl;
+    std::cout << "intrinsics: " << std::endl;
+    std::cout << intrinsics << std::endl << std::endl;
+    std::cout << "gripper configuration: " << std::endl;
+    std::cout << g_config[0].matrix() << std::endl << std::endl;
+    std::cout << g_config[1].matrix() << std::endl << std::endl;
+    std::cout << "gripper velocity: " << std::endl;
+    std::cout << g_dot[0].matrix() << std::endl << std::endl;
+    std::cout << g_dot[1].matrix() << std::endl << std::endl;
 
     return 0;
 }

@@ -27,6 +27,7 @@ find_package(catkin REQUIRED COMPONENTS
   genmsg
   image_geometry
   image_transport
+  rosbag
   roscpp
   sensor_msgs
   std_msgs
@@ -120,7 +121,7 @@ set_target_properties(${PROJECT_NAME}_exp_test PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES)
 add_dependencies(${PROJECT_NAME}_exp_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(${PROJECT_NAME}_exp_test PRIVATE
+target_link_libraries(${PROJECT_NAME}_exp_test PUBLIC
   ${catkin_LIBRARIES}
 )
-target_compile_options(${PROJECT_NAME}_exp_test PRIVATE -O3 -Wall -Wextra -Wconversion -Werror -Wshadow)
+target_compile_options(${PROJECT_NAME}_exp_test PUBLIC -O3 -Wall -Wextra -Wconversion -Werror -Wshadow)
