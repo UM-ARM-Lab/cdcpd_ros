@@ -30,7 +30,7 @@ def main():
     gripper_tf_names = []
     gripper_tf_names.append("victor_left_tool_placeholder")
     gripper_tf_names.append("victor_right_tool_placeholder")
-
+    rospy.sleep(1)
     # at some fixed frequency, query TF for the gripper pose in camera rgbd frame?
     dt = 10
     rate = rospy.Rate(dt)
@@ -87,7 +87,7 @@ def main():
         config_pub.publish(config_msg)
         dot_pub.publish(dot_msg)
         # ind_pub.publish(ind_msg)
-
+        print("publish one frame")
         rate.sleep()
 
 
