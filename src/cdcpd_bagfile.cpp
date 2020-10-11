@@ -443,8 +443,11 @@ std::tuple<Eigen::Matrix3Xf, Eigen::Matrix2Xi> init_template()
     // float left_x = -0.5f; float left_y = -0.5f; float left_z = 3.0f; float right_x = 0.5f; float right_y = -0.5f; float right_z = 3.0f;
     
 	// rope_edge_cover_1
-	float left_x = -0.5f; float left_y = -0.0f; float left_z = 1.0f; float right_x = 0.3f; float right_y = -0.0f; float right_z = 1.0f;
+	// float left_x = -0.5f; float left_y = -0.0f; float left_z = 1.0f; float right_x = 0.3f; float right_y = -0.0f; float right_z = 1.0f;
     
+	// rope_edge_cover_2
+	float left_x = -0.7f; float left_y = -0.0f; float left_z = 1.0f; float right_x = 0.1f; float right_y = -0.0f; float right_z = 1.0f;
+
     int points_on_rope = 40;
 
     MatrixXf vertices(3, points_on_rope); // Y^0 in the paper
@@ -463,15 +466,24 @@ std::tuple<Eigen::Matrix3Xf, Eigen::Matrix2Xi> init_template()
     }
 
     #else
+	
+	
+    // int num_width = 20;
+    // int num_height = 20;
+    // float right_up_y = 0.19f;
+    // float right_up_x = 0.19f;
+    // float left_bottom_y = -0.19f;
+    // float left_bottom_x = -0.19f;
+    // float z = 1.0f;
 
-    int num_width = 20;
-    int num_height = 20;
-    float right_up_y = 0.19f;
-    float right_up_x = 0.19f;
-    float left_bottom_y = -0.19f;
-    float left_bottom_x = -0.19f;
-    float z = 1.0f;
-
+	// cloth edge cover 3
+    int num_width = 15;
+    int num_height = 15;
+    float right_up_y = 0.34f;
+    float right_up_x = -0.4f;
+    float left_bottom_y = 0.06f;
+    float left_bottom_x = -0.68f;
+    float z = 1.08f;
     Eigen::Matrix3Xf vertices = Eigen::Matrix3Xf::Zero(3, num_width * num_height);
     Eigen::Matrix2Xi edges = Eigen::Matrix2Xi::Zero(2, (num_width - 1) * num_height + (num_height - 1) * num_width);
 
@@ -683,6 +695,9 @@ int main(int argc, char* argv[])
 
     // Publsihers for the data, some visualizations, others consumed by other nodes
     pcl::PointCloud<pcl::PointXYZ>::Ptr template_cloud = Matrix3Xf2pcptr(template_vertices);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr template_cloud_init = Matrix3Xf2pcptr(template_vertices);
+
+    auto frame_id = "kinect2_rgb_optical_frame";
 
 	auto original_publisher = nh.advertise<PointCloud> ("cdcpd/original", 1);
     auto masked_publisher = nh.advertise<PointCloud> ("cdcpd/masked", 1);
@@ -718,8 +733,7 @@ int main(int argc, char* argv[])
     cout << "Making buffer" << endl;
     tf2_ros::Buffer tfBuffer;
     tf2_ros::TransformListener tfListener(tfBuffer);
-	
-	
+
     const double alpha = ROSHelpers::GetParam<double>(ph, "alpha", 0.5);
     const double lambda = ROSHelpers::GetParam<double>(ph, "lambda", 1.0);
     const double k_spring = ROSHelpers::GetParam<double>(ph, "k", 100.0);
@@ -747,8 +761,8 @@ int main(int argc, char* argv[])
     topics.push_back(std::string("/kinect2_victor_head/qhd/gripper_config"));
     topics.push_back(std::string("/kinect2_victor_head/qhd/dot_config"));
     // topics.push_back(std::string("/kinect2_victor_head/qhd/gripper_info"));
-	topics.push_back(std::string("/left_arm/gripper_status"));
-	topics.push_back(std::string("/right_arm/gripper_status"));
+	topics.push_back(std::string("/left_arm/gripper_status_repub"));
+	topics.push_back(std::string("/right_arm/gripper_status_repub"));
 	#endif
 
     auto const bagfile = ROSHelpers::GetParam<std::string>(ph, "bagfile", "normal");
@@ -933,7 +947,8 @@ int main(int argc, char* argv[])
 			auto info = m.instantiate<victor_hardware_interface::Robotiq3FingerStatus>();
             if (info != nullptr)
             {
-                l_sub.newMessage(gripper_status_origin_to_sync(info, -14564));
+                // l_sub.newMessage(gripper_status_origin_to_sync(info, -14564));
+                l_sub.newMessage(gripper_status_origin_to_sync(info, 0.0));
             }
             else
             {
@@ -945,7 +960,8 @@ int main(int argc, char* argv[])
 			auto info = m.instantiate<victor_hardware_interface::Robotiq3FingerStatus>();
             if (info != nullptr)
             {
-                r_sub.newMessage(gripper_status_origin_to_sync(info, -15097));
+                // r_sub.newMessage(gripper_status_origin_to_sync(info, -15097));
+                r_sub.newMessage(gripper_status_origin_to_sync(info, 0.0));
             }
             else
             {
@@ -1202,7 +1218,7 @@ int main(int argc, char* argv[])
         }
         else
         {
-            rate.sleep();
+            // rate.sleep();
         }
         if (!ros::ok())
         {
@@ -1273,7 +1289,6 @@ int main(int argc, char* argv[])
         cv::imwrite(workingDir + "/hsv_mask.png", hsv_mask);
         #endif
 
-        auto frame_id = "kinect2_rgb_optical_frame";
         
 		#ifdef SIMULATION
 		cout << "prediction choice: 0" << endl;
@@ -1370,6 +1385,7 @@ int main(int argc, char* argv[])
         out.downsampled_cloud->header.frame_id = frame_id;
         out.cpd_output->header.frame_id = frame_id;
         out.gurobi_output->header.frame_id = frame_id;
+		template_cloud_init->header.frame_id = frame_id;
 
         #ifdef PREDICT
         out.cpd_predict->header.frame_id = frame_id;
@@ -1742,6 +1758,7 @@ int main(int argc, char* argv[])
         pcl_conversions::toPCL(time, out.downsampled_cloud->header.stamp);
         pcl_conversions::toPCL(time, out.cpd_output->header.stamp);
         pcl_conversions::toPCL(time, out.gurobi_output->header.stamp);
+        pcl_conversions::toPCL(time, template_cloud_init->header.stamp);
         #ifdef PREDICT
         pcl_conversions::toPCL(time, out.cpd_predict->header.stamp);
         #endif
@@ -1755,7 +1772,7 @@ int main(int argc, char* argv[])
         #ifdef PREDICT
         pred_publisher.publish(out.cpd_predict);
         #endif
-        output_publisher.publish(out.gurobi_output);
+        output_publisher.publish(template_cloud_init);
 		
 		pcl_conversions::toPCL(time, cpd_phy_pc->header.stamp);	
 		cpd_physics_pub.publish(cpd_phy_pc);
